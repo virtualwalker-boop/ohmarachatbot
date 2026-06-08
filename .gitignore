@@ -1,0 +1,29 @@
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Python Caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Local configuration / secrets
+.env
+.env.development
+.env.local
+
+# Databases
+*.db
+*.sqlite3
+
+# Log and OS files
+*.log
+.DS_Store
+Thumbs.db
+
+# Workspace and temporary cortex directories
+.system_generated/
+.gemini/
