@@ -1,7 +1,7 @@
-import redis.asyncio as redis
 from enum import Enum
-from core.config import settings
-import json
+from sqlalchemy.future import select
+from core.database import AsyncSessionLocal
+from models import Customer
 
 class UserState(str, Enum):
     IDLE = "IDLE"
@@ -12,44 +12,58 @@ class UserState(str, Enum):
     AWAITING_PAYMENT = "AWAITING_PAYMENT"
 
 class StateMachine:
-    def __init__(self):
-        self.redis = redis.from_url(settings.redis_url, decode_responses=True)
-
-    def _get_key(self, psid: str) -> str:
-        return f"fsm:user:{psid}"
-
     async def get_state(self, psid: str) -> UserState:
-        data = await self.redis.get(self._get_key(psid))
-        if data:
-            try:
-                state_data = json.loads(data)
-                return UserState(state_data.get("state", UserState.IDLE.value))
-            except json.JSONDecodeError:
-                return UserState.IDLE
-        return UserState.IDLE
+        async with AsyncSessionLocal() as db:
+            stmt = select(Customer).where(Customer.fb_psid == psid)
+            result = await db.execute(stmt)
+            customer = result.scalars().first()
+            if customer and customer.fsm_state:
+                try:
+                    return UserState(customer.fsm_state)
+                except ValueError:
+                    return UserState.IDLE
+            return UserState.IDLE
 
     async def set_state(self, psid: str, state: UserState, context: dict = None):
         if context is None:
             context = {}
-        data = {
-            "state": state.value,
-            "context": context
-        }
-        await self.redis.set(self._get_key(psid), json.dumps(data), ex=86400) # 24 hours expiry
+        async with AsyncSessionLocal() as db:
+            stmt = select(Customer).where(Customer.fb_psid == psid)
+            result = await db.execute(stmt)
+            customer = result.scalars().first()
+            if not customer:
+                customer = Customer(fb_psid=psid)
+                db.add(customer)
+            customer.fsm_state = state.value
+            customer.fsm_context = context
+            db.add(customer)
+            await db.commit()
 
     async def get_context(self, psid: str) -> dict:
-        data = await self.redis.get(self._get_key(psid))
-        if data:
-            try:
-                return json.loads(data).get("context", {})
-            except json.JSONDecodeError:
-                return {}
-        return {}
+        async with AsyncSessionLocal() as db:
+            stmt = select(Customer).where(Customer.fb_psid == psid)
+            result = await db.execute(stmt)
+            customer = result.scalars().first()
+            if customer and customer.fsm_context:
+                return customer.fsm_context
+            return {}
 
     async def update_context(self, psid: str, new_context: dict):
-        state = await self.get_state(psid)
-        context = await self.get_context(psid)
-        context.update(new_context)
-        await self.set_state(psid, state, context)
+        async with AsyncSessionLocal() as db:
+            stmt = select(Customer).where(Customer.fb_psid == psid)
+            result = await db.execute(stmt)
+            customer = result.scalars().first()
+            if not customer:
+                customer = Customer(fb_psid=psid)
+                db.add(customer)
+            
+            current_context = customer.fsm_context or {}
+            # Update context dictionary
+            updated_context = dict(current_context)
+            updated_context.update(new_context)
+            customer.fsm_context = updated_context
+            db.add(customer)
+            await db.commit()
 
 fsm = StateMachine()
+

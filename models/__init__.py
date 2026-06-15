@@ -10,6 +10,8 @@ class Customer(Base):
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
     contact_number = Column(String, nullable=True)
+    fsm_state = Column(String, default="IDLE", nullable=True)
+    fsm_context = Column(JSON, default=dict, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     bookings = relationship("Booking", back_populates="customer")
