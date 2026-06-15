@@ -37,7 +37,9 @@ async def send_messenger_response(psid: str, message_payload: dict):
                 })
                 logger.info(f"Meta Graph API response status: {resp.status_code}")
         except Exception as e:
-            logger.error(f"Error calling Meta Graph API: {e}")
+            import traceback
+            traceback.print_exc()
+            logger.error(f"Error calling Meta Graph API: {e}", exc_info=True)
 
 # Helper to send a simple text response
 async def send_text_response(psid: str, text: str, include_menu: bool = True):
