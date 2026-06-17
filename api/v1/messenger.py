@@ -35,10 +35,13 @@ async def send_messenger_response(psid: str, message_payload: dict):
                     "recipient": {"id": psid},
                     "message": message_payload
                 })
+                print(f"Meta Graph API response status: {resp.status_code}")
+                print(f"Meta Graph API response text: {resp.text}")
                 logger.info(f"Meta Graph API response status: {resp.status_code}")
         except Exception as e:
             import traceback
             traceback.print_exc()
+            print(f"Error calling Meta Graph API: {e}")
             logger.error(f"Error calling Meta Graph API: {e}", exc_info=True)
 
 # Helper to send a simple text response
@@ -113,11 +116,14 @@ async def verify_webhook(
     challenge = hub_challenge or request.query_params.get("hub_challenge")
     verify_token = hub_verify_token or request.query_params.get("hub_verify_token")
     
+    print(f"Webhook Verification Request - Mode: {mode}, Verify Token: {verify_token}, Expected Token: {settings.meta_verify_token}")
+    
     if mode == "subscribe" and verify_token == settings.meta_verify_token:
         try:
             return int(challenge)
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail="Invalid challenge format")
+    print("Webhook Verification Failed!")
     raise HTTPException(status_code=403, detail="Verification failed")
 
 # Webhook Payload Receiver endpoint
@@ -139,6 +145,7 @@ async def receive_webhook(request: Request):
     #     raise HTTPException(status_code=403, detail="Invalid signature")
 
     payload = await request.json()
+    print(f"Incoming Webhook Payload: {json.dumps(payload, indent=2)}")
     if payload.get("object") == "page":
         for entry in payload.get("entry", []):
             for event in entry.get("messaging", []):
